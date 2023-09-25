@@ -1,32 +1,59 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as faceapi from "face-api.js";
-import "../App.css";
+import './style/style.css'
 
 function FaceRecognition() {
   const videoRef = useRef(null);
+  const canvasRef = useRef(null); // Referencia al elemento canvas
+  const [cameraOn, setCameraOn] = useState(false); // Estado para controlar si la cámara está encendida o apagada
+
+  // Mantén un estado separado para controlar si el canvas debe mostrarse
+  const [canvasVisible, setCanvasVisible] = useState(false);
+
+  // Definir la función startWebcam antes de su uso
+  async function startWebcam() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setCameraOn(true); // Cambia el estado para indicar que la cámara está encendida
+        setCanvasVisible(true); // Muestra el canvas cuando se enciende la cámara
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  // Definir la función stopWebcam antes de su uso
+  async function stopWebcam() {
+    const video = videoRef.current;
+
+    if (video) {
+      const stream = video.srcObject;
+      const tracks = stream.getTracks();
+
+      tracks.forEach((track) => {
+        track.stop();
+      });
+
+      video.srcObject = null;
+      setCameraOn(false); // Cambia el estado para indicar que la cámara está apagada
+      setCanvasVisible(false); // Oculta el canvas cuando se apaga la cámara
+    }
+  }
 
   useEffect(() => {
-    async function startWebcam() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
     async function getLabeledFaceDescriptions() {
-      const labels = ["Luis","Jose", "Daniel", "Doang"];
+      const labels = ["Luis", "Jose", "Daniel", "Doang"];
       return Promise.all(
         labels.map(async (label) => {
           const descriptions = [];
           for (let i = 1; i <= 2; i++) {
-            const img = await faceapi.fetchImage(`./labels/${label}/${i}.jpeg`);
+            // Usa la ruta correcta hacia la imagen en la carpeta public
+            const img = await faceapi.fetchImage(`/labels/${label}/${i}.jpeg`);
             const detections = await faceapi
               .detectSingleFace(img)
               .withFaceLandmarks()
@@ -40,7 +67,6 @@ function FaceRecognition() {
 
     async function setupFaceRecognition() {
       const labeledFaceDescriptors = await getLabeledFaceDescriptions();
-    //   console.log(labeledFaceDescriptors)//Me retorna las carpetas
       const faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors);
       const video = videoRef.current;
 
@@ -86,25 +112,43 @@ function FaceRecognition() {
         faceapi.nets.faceRecognitionNet.loadFromUri("/models"),
         faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
       ]);
+
       startWebcam();
       setupFaceRecognition();
     }
 
     loadModels();
+
+    // Limpia la cámara y el canvas cuando el componente se desmonta
+    return () => {
+      stopWebcam();
+    };
   }, []);
 
   return (
-    <div>
-      {/* <h1>FAce Detection</h1> */}
-
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        playsInline
-        width="600"
-        height="450"
-      ></video>
+    <div className="container">
+      <div>
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          width="600"
+          height="450"
+        ></video>
+      </div>
+      <div>
+        <button onClick={startWebcam} disabled={cameraOn}>
+          Encender Cámara
+        </button>
+        <button onClick={stopWebcam} disabled={!cameraOn}>
+          Apagar Cámara
+        </button>
+      </div>
+      {/* Use el estado `canvasVisible` para controlar si se muestra el canvas */}
+      {canvasVisible && (
+        <canvas ref={canvasRef} style={{ display: "block" }}></canvas>
+      )}
     </div>
   );
 }
